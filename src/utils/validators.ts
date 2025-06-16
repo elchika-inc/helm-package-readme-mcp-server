@@ -217,5 +217,8 @@ export function parsePackageName(packageName: string): { repo: string; chart: st
   validatePackageName(packageName);
   
   const [repo, chart] = packageName.trim().split('/');
-  return { repo: repo.trim(), chart: chart.trim() };
+  return { 
+    repo: repo?.trim() || '', 
+    chart: chart?.trim() || '' 
+  };
 }

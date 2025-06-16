@@ -49,6 +49,8 @@ export class ReadmeParser {
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
+      if (!line) continue;
+      
       const isHeader = /^#{1,6}\s/.test(line);
       
       if (isHeader) {
@@ -100,6 +102,7 @@ export class ReadmeParser {
 
     while ((match = codeBlockRegex.exec(section)) !== null) {
       const [, language = 'text', code] = match;
+      if (!code) continue;
       const cleanCode = code.trim();
       
       if (cleanCode.length === 0) {
@@ -123,7 +126,7 @@ export class ReadmeParser {
 
   private generateExampleTitle(code: string, language: string): string {
     // Try to infer title from code content
-    const firstLine = code.split('\n')[0].trim();
+    const firstLine = code.split('\n')[0]?.trim() || '';
     const lowerLang = language.toLowerCase();
     
     if (lowerLang === 'bash' || lowerLang === 'shell' || lowerLang === 'sh' || lowerLang === 'console') {
@@ -361,7 +364,7 @@ export class ReadmeParser {
           
           // If we have accumulated comments and values, create an example
           if (currentComment && currentSection.length > 0) {
-            const title = this.extractValuesTitle(currentSection[0]);
+            const title = this.extractValuesTitle(currentSection[0] || '');
             examples.push({
               title: title || 'Values Configuration',
               description: currentComment,
@@ -383,7 +386,7 @@ export class ReadmeParser {
       
       // Add any remaining section
       if (currentSection.length > 0) {
-        const title = this.extractValuesTitle(currentSection[0]);
+        const title = this.extractValuesTitle(currentSection[0] || '');
         examples.push({
           title: title || 'Values Configuration',
           description: currentComment || undefined,
@@ -403,7 +406,7 @@ export class ReadmeParser {
     // Extract the key from a YAML line like "replicaCount: 1"
     const match = valueLine.match(/^(\s*)([^:]+):/);
     if (match) {
-      const key = match[2].trim();
+      const key = match[2]?.trim() || '';
       // Convert camelCase to Title Case
       return key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()) + ' Configuration';
     }

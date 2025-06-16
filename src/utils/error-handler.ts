@@ -154,8 +154,8 @@ export function isRetryableError(error: unknown): boolean {
 }
 
 export function getRetryDelay(error: unknown, attempt: number, baseDelay: number = 1000): number {
-  if (error instanceof RateLimitError && error.details?.retryAfter) {
-    return (error.details.retryAfter as number) * 1000; // Convert to milliseconds
+  if (error instanceof RateLimitError && error.details && typeof error.details === 'object' && 'retryAfter' in error.details) {
+    return ((error.details as any).retryAfter as number) * 1000; // Convert to milliseconds
   }
 
   if (error instanceof RetryableError && error.retryAfter) {

@@ -10,7 +10,7 @@ export class GitHubApiClient {
 
   constructor(timeout?: number, token?: string) {
     this.timeout = timeout || 30000;
-    this.token = token || process.env.GITHUB_TOKEN;
+    this.token = token || process.env.GITHUB_TOKEN || '';
   }
 
   private parseGitHubUrl(url: string): { owner: string; repo: string } | null {
@@ -25,7 +25,7 @@ export class GitHubApiClient {
 
       for (const pattern of patterns) {
         const match = url.match(pattern);
-        if (match) {
+        if (match && match[1] && match[2]) {
           return {
             owner: match[1],
             repo: match[2],

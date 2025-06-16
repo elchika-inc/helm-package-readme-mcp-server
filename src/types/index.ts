@@ -6,8 +6,8 @@ export interface UsageExample {
 }
 
 export interface InstallationInfo {
-  helm: string;      // "helm install name repo/chart"
-  repository?: string; // "helm repo add name url"
+  command: string;        // Main install command
+  alternatives?: string[]; // Alternative commands
 }
 
 export interface AuthorInfo {
@@ -89,12 +89,14 @@ export interface PackageReadmeResponse {
   installation: InstallationInfo;
   basic_info: PackageBasicInfo;
   repository?: RepositoryInfo | undefined;
+  exists: boolean;
 }
 
 export interface PackageInfoResponse {
   package_name: string;
   latest_version: string;
   description: string;
+  author: string;
   maintainers: AuthorInfo[];
   license?: string | undefined;
   keywords: string[];
@@ -105,6 +107,7 @@ export interface PackageInfoResponse {
   app_version?: string | undefined;
   deprecated?: boolean | undefined;
   signed?: boolean | undefined;
+  exists: boolean;
 }
 
 export interface SearchPackagesResponse {

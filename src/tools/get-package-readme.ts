@@ -36,8 +36,34 @@ export async function getPackageReadme(params: GetPackageReadmeParams): Promise<
   }
 
   try {
-    // Get package info from Artifact Hub
-    const packageInfo = await artifactHubClient.getPackageInfo(package_name, normalizedVersion);
+    // Check package existence first
+    logger.debug(`Checking package existence: ${package_name}`);
+    let packageInfo;
+    try {
+      packageInfo = await artifactHubClient.getPackageInfo(package_name, normalizedVersion);
+    } catch (error) {
+      // Package doesn't exist, return response with exists: false
+      logger.warn(`Package not found: ${package_name}@${normalizedVersion}`);
+      const notFoundResponse: PackageReadmeResponse = {
+        package_name,
+        version: normalizedVersion,
+        description: '',
+        readme_content: '',
+        usage_examples: [],
+        installation: { command: '' },
+        basic_info: {
+          name: package_name,
+          version: normalizedVersion,
+          description: '',
+          maintainers: [],
+          keywords: [],
+        },
+        exists: false,
+      };
+      return notFoundResponse;
+    }
+    
+    logger.debug(`Package found: ${package_name}@${normalizedVersion}`);
     
     // Extract README content
     let readmeContent = packageInfo.readme || '';
@@ -69,7 +95,7 @@ export async function getPackageReadme(params: GetPackageReadmeParams): Promise<
     if (include_examples) {
       try {
         const [repo, chart] = package_name.split('/');
-        const valuesContent = await artifactHubClient.getPackageValues(repo, chart, normalizedVersion);
+        const valuesContent = await artifactHubClient.getPackageValues(repo || '', chart || '', normalizedVersion);
         if (valuesContent) {
           const valuesExamples = readmeParser.extractValuesDocumentation(valuesContent);
           usageExamples.push(...valuesExamples);
@@ -84,14 +110,22 @@ export async function getPackageReadme(params: GetPackageReadmeParams): Promise<
 
     // Build installation info
     const [repo, chart] = package_name.split('/');
-    const installation: InstallationInfo = {
-      helm: `helm install my-${chart} ${package_name}`,
-    };
-
+    const alternatives: string[] = [];
+    
     // Add repository URL if available
     if (packageInfo.repository && packageInfo.repository.url !== packageInfo.repository.name) {
-      installation.repository = `helm repo add ${repo} ${packageInfo.repository.url}`;
+      alternatives.push(`helm repo add ${repo} ${packageInfo.repository.url}`);
     }
+    
+    // Add version-specific install command
+    if (normalizedVersion !== 'latest') {
+      alternatives.push(`helm install my-${chart} ${package_name} --version ${packageInfo.version}`);
+    }
+    
+    const installation: InstallationInfo = {
+      command: `helm install my-${chart} ${package_name}`,
+      ...(alternatives.length > 0 && { alternatives }),
+    };
 
     // Build basic info
     const basicInfo: PackageBasicInfo = {
@@ -129,6 +163,7 @@ export async function getPackageReadme(params: GetPackageReadmeParams): Promise<
       installation,
       basic_info: basicInfo,
       repository: repositoryInfo,
+      exists: true,
     };
 
     // Cache the response

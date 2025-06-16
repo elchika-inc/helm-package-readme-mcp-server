@@ -111,7 +111,10 @@ export class Cache {
       entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
       
       for (let i = 0; i < entriesToRemove && i < entries.length; i++) {
-        this.data.delete(entries[i][0]);
+        const entry = entries[i];
+        if (entry) {
+          this.data.delete(entry[0]);
+        }
       }
       
       logger.debug(`Cache size limit reached, removed ${entriesToRemove} oldest entries`);

@@ -27,13 +27,6 @@ export class Logger {
 
   private formatMessage(level: LogLevel, message: string, data?: unknown): string {
     const timestamp = new Date().toISOString();
-    const logEntry: LogEntry = {
-      timestamp,
-      level,
-      message,
-      data,
-    };
-
     // For console output, use a more readable format
     let formatted = `[${timestamp}] ${level.toUpperCase()}: ${message}`;
     
@@ -83,5 +76,5 @@ export class Logger {
 }
 
 // Create and export a singleton logger instance
-const logLevel = (process.env.LOG_LEVEL as LogLevel) || 'info';
+const logLevel = (process.env.LOG_LEVEL as LogLevel) || 'warn';
 export const logger = new Logger(logLevel);
