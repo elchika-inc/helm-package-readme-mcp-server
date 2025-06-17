@@ -41,6 +41,16 @@ export async function searchPackages(params: SearchPackagesParams): Promise<Sear
     // Search packages via Artifact Hub
     const searchResults = await artifactHubClient.searchPackages(sanitizedQuery, limit);
     
+    // Validate search results structure
+    if (!searchResults?.data?.packages) {
+      logger.warn(`Invalid search results structure from Artifact Hub`, { searchResults });
+      return {
+        query: sanitizedQuery,
+        total: 0,
+        packages: [],
+      };
+    }
+    
     // Transform results to our format
     const packages: PackageSearchResult[] = searchResults.data.packages.map(pkg => {
       const maintainers: AuthorInfo[] = pkg.maintainers?.map(m => ({

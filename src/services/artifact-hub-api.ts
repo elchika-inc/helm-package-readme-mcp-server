@@ -156,6 +156,17 @@ export class ArtifactHubClient {
         }
 
         const data = await response.json() as ArtifactHubSearchResponse;
+        
+        // Validate response structure
+        if (!data || !data.data || !Array.isArray(data.data.packages)) {
+          logger.warn(`Invalid response structure from Artifact Hub search`, { data });
+          return {
+            data: {
+              packages: []
+            }
+          };
+        }
+        
         logger.debug(`Successfully searched Helm charts: ${query}, found ${data.data.packages.length} results`);
         return data;
       } catch (error) {
