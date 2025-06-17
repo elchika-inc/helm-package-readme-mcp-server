@@ -1,27 +1,56 @@
 # Helm Package README MCP Server
 
-A Model Context Protocol (MCP) server that provides access to Helm chart documentation and usage information from Artifact Hub.
+[![npm version](https://img.shields.io/npm/v/helm-package-readme-mcp-server)](https://www.npmjs.com/package/helm-package-readme-mcp-server)
+[![npm downloads](https://img.shields.io/npm/dm/helm-package-readme-mcp-server)](https://www.npmjs.com/package/helm-package-readme-mcp-server)
+[![GitHub stars](https://img.shields.io/github/stars/naoto24kawa/package-readme-mcp-servers)](https://github.com/naoto24kawa/package-readme-mcp-servers)
+[![GitHub issues](https://img.shields.io/github/issues/naoto24kawa/package-readme-mcp-servers)](https://github.com/naoto24kawa/package-readme-mcp-servers/issues)
+[![license](https://img.shields.io/npm/l/helm-package-readme-mcp-server)](https://github.com/naoto24kawa/package-readme-mcp-servers/blob/main/LICENSE)
+
+A Model Context Protocol (MCP) server that provides access to Helm chart documentation and usage information from Artifact Hub. This server allows you to fetch README content and metadata for any Helm chart directly through Claude Desktop or other MCP-compatible clients.
 
 ## Features
 
-- **Get Helm Chart README**: Retrieve comprehensive documentation and usage examples for any Helm chart
-- **Get Chart Information**: Access chart metadata, dependencies, and maintainer information
-- **Search Charts**: Find charts by name, keywords, or description
-- **Smart Parsing**: Automatically extract usage examples from README content and values.yaml
-- **GitHub Integration**: Fallback to GitHub for README content when not available in Artifact Hub
-- **Caching**: Intelligent caching to improve performance and reduce API calls
+- 📋 **Get Helm Chart README**: Retrieve comprehensive documentation and usage examples for any Helm chart
+- 📦 **Get Chart Information**: Access chart metadata, dependencies, and maintainer information  
+- 🔍 **Search Charts**: Find charts by name, keywords, or description
+- 🧠 **Smart Parsing**: Automatically extract usage examples from README content and values.yaml
+- 🐙 **GitHub Integration**: Fallback to GitHub for README content when not available in Artifact Hub
+- ⚡ **Caching**: Intelligent caching to improve performance and reduce API calls
 
 ## Installation
 
+Install via npm:
 ```bash
-npm install helm-package-readme-mcp-server
+npm install -g helm-package-readme-mcp-server
+```
+
+Or use directly with npx:
+```bash
+npx helm-package-readme-mcp-server
 ```
 
 ## Usage
 
-### MCP Client Configuration
+### Claude Desktop Configuration
 
-Add to your MCP client configuration:
+Add to your Claude Desktop configuration file (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "helm-package-readme": {
+      "command": "helm-package-readme-mcp-server",
+      "env": {
+        "GITHUB_TOKEN": "your-github-token-here"
+      }
+    }
+  }
+}
+```
+
+### Generic MCP Client Configuration
+
+For other MCP clients, use:
 
 ```json
 {
@@ -110,14 +139,14 @@ Examples:
 - `stable/mysql`
 - `prometheus-community/prometheus`
 
-## Features
+## Key Capabilities
 
 ### Smart README Parsing
 
 The server automatically extracts usage examples from:
-- README.md content
-- values.yaml documentation
-- Chart.yaml dependencies
+- 📄 README.md content
+- 🔧 values.yaml documentation  
+- 📋 Chart.yaml dependencies
 
 ### Example Types Detected
 
@@ -129,19 +158,27 @@ The server automatically extracts usage examples from:
 ### GitHub Integration
 
 When README content is not available in Artifact Hub, the server automatically:
-1. Extracts repository information from the chart metadata
-2. Attempts to fetch README.md from the GitHub repository
-3. Tries multiple README filename variations (README.md, readme.md, etc.)
-4. Supports both main and master branch fallbacks
+1. 🔍 Extracts repository information from the chart metadata
+2. 📥 Attempts to fetch README.md from the GitHub repository
+3. 🔄 Tries multiple README filename variations (README.md, readme.md, etc.)
+4. 🌿 Supports both main and master branch fallbacks
 
 ### Caching Strategy
 
-- **Package Info**: Cached for 1 hour
-- **README Content**: Cached for 1 hour  
-- **Search Results**: Cached for 5 minutes
-- **Values.yaml**: Cached for 1 hour
+- **Package Info**: ⏰ Cached for 1 hour
+- **README Content**: ⏰ Cached for 1 hour  
+- **Search Results**: ⚡ Cached for 5 minutes
+- **Values.yaml**: ⏰ Cached for 1 hour
 
 ## Development
+
+### Setup
+
+```bash
+git clone <repository-url>
+cd helm-package-readme-mcp-server
+npm install
+```
 
 ### Build
 
@@ -161,6 +198,12 @@ npm run dev
 npm test
 ```
 
+### Type Checking
+
+```bash
+npm run typecheck
+```
+
 ### Linting
 
 ```bash
@@ -170,18 +213,18 @@ npm run lint
 ## API Integration
 
 This server integrates with:
-- **Artifact Hub API**: Primary source for chart information
-- **GitHub API**: Fallback for README content
-- **Helm Repository APIs**: Chart metadata and versions
+- 🏢 **Artifact Hub API**: Primary source for chart information
+- 🐙 **GitHub API**: Fallback for README content  
+- ⛵ **Helm Repository APIs**: Chart metadata and versions
 
 ## Error Handling
 
 The server provides comprehensive error handling for:
-- Package not found errors
-- Invalid package name formats
-- API rate limiting
-- Network timeouts
-- Malformed chart data
+- ❌ Package not found errors
+- 🔍 Invalid package name formats
+- ⏱️ API rate limiting
+- 🌐 Network timeouts
+- 📦 Malformed chart data
 
 ## Contributing
 
