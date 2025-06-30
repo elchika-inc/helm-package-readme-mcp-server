@@ -64,25 +64,30 @@ export class GitHubApiClient {
   }
 
   private async getReadmeViaApi(owner: string, repo: string, directory?: string): Promise<string | null> {
-    const path = directory ? `${directory}/README.md` : 'README.md';
+    const readmeFilenames = ['README.md', 'readme.md', 'README.rst', 'readme.rst', 'README.txt', 'readme.txt'];
+    
+    for (const filename of readmeFilenames) {
+      const content = await this.tryFetchReadmeFile(owner, repo, filename, directory);
+      if (content) {
+        return content;
+      }
+    }
+    
+    return null;
+  }
+
+  private async tryFetchReadmeFile(owner: string, repo: string, filename: string, directory?: string): Promise<string | null> {
+    const path = directory ? `${directory}/${filename}` : filename;
     const url = `${this.baseUrl}/repos/${owner}/${repo}/contents/${path}`;
 
     return withRetry(async () => {
-      logger.debug(`Fetching README via GitHub API: ${owner}/${repo}/${path}`);
+      logger.debug(`Trying README file via GitHub API: ${owner}/${repo}/${path}`);
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.timeout);
       
       try {
-        const headers: Record<string, string> = {
-          'Accept': 'application/vnd.github.v3+json',
-          'User-Agent': 'helm-package-readme-mcp/1.0.0',
-        };
-
-        if (this.token) {
-          headers['Authorization'] = `token ${this.token}`;
-        }
-
+        const headers = this.getApiHeaders();
         const response = await fetch(url, {
           signal: controller.signal,
           headers,
@@ -90,31 +95,8 @@ export class GitHubApiClient {
 
         if (!response.ok) {
           if (response.status === 404) {
-            // Try alternative README filenames
-            for (const filename of ['readme.md', 'README.rst', 'readme.rst', 'README.txt', 'readme.txt']) {
-              const altPath = directory ? `${directory}/${filename}` : filename;
-              const altUrl = `${this.baseUrl}/repos/${owner}/${repo}/contents/${altPath}`;
-              
-              try {
-                const altResponse = await fetch(altUrl, {
-                  signal: controller.signal,
-                  headers,
-                });
-                
-                if (altResponse.ok) {
-                  const altData = await altResponse.json() as GitHubReadmeResponse;
-                  const content = Buffer.from(altData.content, 'base64').toString('utf-8');
-                  logger.debug(`Found alternative README: ${owner}/${repo}/${altPath}`);
-                  return content;
-                }
-              } catch (altError) {
-                // Continue trying other filenames
-              }
-            }
-            
-            return null; // No README found
+            return null; // File not found, try next
           }
-          
           handleHttpError(response.status, response, `GitHub API for ${owner}/${repo}/${path}`);
         }
 
@@ -127,11 +109,26 @@ export class GitHubApiClient {
         if ((error as Error).name === 'AbortError') {
           handleApiError(new Error('Request timeout'), `GitHub API for ${owner}/${repo}/${path}`);
         }
-        handleApiError(error, `GitHub API for ${owner}/${repo}/${path}`);
+        // Return null for errors, will try next filename
+        logger.debug(`Failed to fetch ${path}, trying next filename`, { error });
+        return null;
       } finally {
         clearTimeout(timeoutId);
       }
-    }, 3, 1000, `GitHub API getReadmeViaApi(${owner}/${repo})`);
+    }, 2, 1000, `GitHub API tryFetchReadmeFile(${owner}/${repo}/${path})`);
+  }
+
+  private getApiHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+      'Accept': 'application/vnd.github.v3+json',
+      'User-Agent': 'helm-package-readme-mcp/1.0.0',
+    };
+
+    if (this.token) {
+      headers['Authorization'] = `token ${this.token}`;
+    }
+
+    return headers;
   }
 
   private async getReadmeViaRaw(owner: string, repo: string, directory?: string): Promise<string | null> {

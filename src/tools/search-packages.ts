@@ -52,30 +52,7 @@ export async function searchPackages(params: SearchPackagesParams): Promise<Sear
     }
     
     // Transform results to our format
-    const packages: PackageSearchResult[] = searchResults.data.packages.map(pkg => {
-      const maintainers: AuthorInfo[] = pkg.maintainers?.map(m => ({
-        name: m.name,
-        email: m.email,
-      })) || [];
-
-      return {
-        name: `${pkg.repository.name}/${pkg.name}`,
-        version: pkg.version,
-        description: pkg.description,
-        keywords: pkg.keywords || [],
-        repository: {
-          name: pkg.repository.name,
-          display_name: pkg.repository.display_name || pkg.repository.name,
-          url: pkg.repository.url,
-        },
-        maintainers,
-        app_version: pkg.app_version,
-        created_at: new Date(pkg.created_at * 1000).toISOString(),
-        deprecated: pkg.deprecated,
-        signed: pkg.signed,
-        stars: pkg.stars,
-      };
-    });
+    const packages: PackageSearchResult[] = searchResults.data.packages.map(transformPackageSearchResult);
 
     const response: SearchPackagesResponse = {
       query: sanitizedQuery,
@@ -93,4 +70,30 @@ export async function searchPackages(params: SearchPackagesParams): Promise<Sear
     logger.error(`Failed to search packages: "${sanitizedQuery}"`, { error });
     throw error;
   }
+}
+
+// Helper function for better separation of concerns
+function transformPackageSearchResult(pkg: any): PackageSearchResult {
+  const maintainers: AuthorInfo[] = pkg.maintainers?.map((m: any) => ({
+    name: m.name,
+    email: m.email,
+  })) || [];
+
+  return {
+    name: `${pkg.repository.name}/${pkg.name}`,
+    version: pkg.version,
+    description: pkg.description,
+    keywords: pkg.keywords || [],
+    repository: {
+      name: pkg.repository.name,
+      display_name: pkg.repository.display_name || pkg.repository.name,
+      url: pkg.repository.url,
+    },
+    maintainers,
+    app_version: pkg.app_version,
+    created_at: new Date(pkg.created_at * 1000).toISOString(),
+    deprecated: pkg.deprecated,
+    signed: pkg.signed,
+    stars: pkg.stars,
+  };
 }

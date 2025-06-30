@@ -256,6 +256,17 @@ export class PackageReadmeMcpError extends Error {
     super(message);
     this.name = 'PackageReadmeMcpError';
   }
+
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      code: this.code,
+      statusCode: this.statusCode,
+      details: this.details,
+      stack: this.stack
+    };
+  }
 }
 
 export class PackageNotFoundError extends PackageReadmeMcpError {

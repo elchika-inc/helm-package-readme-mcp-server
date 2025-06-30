@@ -1,6 +1,21 @@
 import { logger } from '../utils/logger.js';
 import type { UsageExample } from '../types/index.js';
 
+export interface ParsedReadme {
+  sections: {
+    installation?: string;
+    configuration?: string;
+    usage?: string;
+    values?: string;
+  };
+  codeBlocks: Array<{
+    language: string;
+    code: string;
+    title: string;
+  }>;
+  helmCommands: string[];
+}
+
 export class ReadmeParser {
   private static readonly USAGE_SECTION_PATTERNS = [
     /^#{1,6}\s*(usage|use|using|how to use|getting started|quick start|examples?|basic usage|installation|installing|install)\s*$/gim,
@@ -11,6 +26,99 @@ export class ReadmeParser {
   ];
 
   private static readonly CODE_BLOCK_PATTERN = /```(\w+)?\n([\s\S]*?)```/g;
+
+  parseReadme(content: string): ParsedReadme {
+    const sections = this.extractSections(content);
+    const codeBlocks = this.extractAllCodeBlocks(content);
+    const helmCommands = this.extractHelmCommands(codeBlocks);
+
+    return {
+      sections,
+      codeBlocks,
+      helmCommands,
+    };
+  }
+
+  private extractSections(content: string): ParsedReadme['sections'] {
+    const sections: ParsedReadme['sections'] = {};
+    const lines = content.split('\n');
+    let currentSection = '';
+    let currentContent: string[] = [];
+
+    for (const line of lines) {
+      if (line.match(/^#{1,6}\s+/)) {
+        // Save previous section
+        if (currentSection && currentContent.length > 0) {
+          const sectionKey = this.getSectionKey(currentSection);
+          if (sectionKey) {
+            sections[sectionKey] = currentContent.join('\n').trim();
+          }
+        }
+
+        // Start new section
+        currentSection = line.replace(/^#{1,6}\s+/, '').toLowerCase();
+        currentContent = [];
+      } else if (currentSection) {
+        currentContent.push(line);
+      }
+    }
+
+    // Save last section
+    if (currentSection && currentContent.length > 0) {
+      const sectionKey = this.getSectionKey(currentSection);
+      if (sectionKey) {
+        sections[sectionKey] = currentContent.join('\n').trim();
+      }
+    }
+
+    return sections;
+  }
+
+  private getSectionKey(sectionTitle: string): keyof ParsedReadme['sections'] | null {
+    const title = sectionTitle.toLowerCase();
+    if (title.includes('install')) return 'installation';
+    if (title.includes('config')) return 'configuration';
+    if (title.includes('usage') || title.includes('use')) return 'usage';
+    if (title.includes('values')) return 'values';
+    return null;
+  }
+
+  private extractAllCodeBlocks(content: string): ParsedReadme['codeBlocks'] {
+    const blocks: ParsedReadme['codeBlocks'] = [];
+    const regex = new RegExp(ReadmeParser.CODE_BLOCK_PATTERN.source, 'g');
+    let match;
+
+    while ((match = regex.exec(content)) !== null) {
+      const [, language = 'text', code] = match;
+      if (code && code.trim()) {
+        blocks.push({
+          language: this.normalizeLanguage(language),
+          code: code.trim(),
+          title: this.generateExampleTitle(code.trim(), language),
+        });
+      }
+    }
+
+    return blocks;
+  }
+
+  private extractHelmCommands(codeBlocks: ParsedReadme['codeBlocks']): string[] {
+    const commands: string[] = [];
+    
+    for (const block of codeBlocks) {
+      if (this.isShellLanguage(block.language)) {
+        const lines = block.code.split('\n');
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('helm ')) {
+            commands.push(trimmed);
+          }
+        }
+      }
+    }
+
+    return commands;
+  }
 
   parseUsageExamples(readmeContent: string, includeExamples: boolean = true): UsageExample[] {
     if (!includeExamples || !readmeContent) {
@@ -125,67 +233,65 @@ export class ReadmeParser {
   }
 
   private generateExampleTitle(code: string, language: string): string {
-    // Try to infer title from code content
     const firstLine = code.split('\n')[0]?.trim() || '';
     const lowerLang = language.toLowerCase();
     
-    if (lowerLang === 'bash' || lowerLang === 'shell' || lowerLang === 'sh' || lowerLang === 'console') {
-      if (firstLine.includes('helm repo add')) {
-        return 'Add Helm Repository';
-      }
-      if (firstLine.includes('helm install')) {
-        return 'Install Chart';
-      }
-      if (firstLine.includes('helm upgrade')) {
-        return 'Upgrade Chart';
-      }
-      if (firstLine.includes('helm uninstall') || firstLine.includes('helm delete')) {
-        return 'Uninstall Chart';
-      }
-      if (firstLine.includes('kubectl')) {
-        return 'Kubernetes Command';
-      }
-      return 'Command Line Usage';
+    return this.getTitleByLanguage(code, firstLine, lowerLang);
+  }
+
+  private getTitleByLanguage(code: string, firstLine: string, language: string): string {
+    if (this.isShellLanguage(language)) {
+      return this.getShellCommandTitle(firstLine);
     }
 
-    if (lowerLang === 'yaml' || lowerLang === 'yml') {
-      if (code.includes('apiVersion:') && code.includes('kind:')) {
-        return 'Kubernetes Manifest';
-      }
-      if (code.includes('replicaCount:') || code.includes('image:') || code.includes('service:')) {
-        return 'Values Configuration';
-      }
-      if (code.includes('global:')) {
-        return 'Global Values';
-      }
-      return 'YAML Configuration';
+    if (this.isYamlLanguage(language)) {
+      return this.getYamlConfigTitle(code);
     }
 
-    if (lowerLang === 'json') {
-      return 'JSON Configuration';
-    }
+    return this.getGenericLanguageTitle(language);
+  }
 
-    if (lowerLang === 'dockerfile' || lowerLang === 'docker') {
-      return 'Docker Configuration';
-    }
+  private isShellLanguage(language: string): boolean {
+    return ['bash', 'shell', 'sh', 'console'].includes(language);
+  }
 
-    if (lowerLang === 'helm' || lowerLang === 'gotmpl' || lowerLang === 'go-template') {
-      return 'Helm Template';
-    }
+  private isYamlLanguage(language: string): boolean {
+    return ['yaml', 'yml'].includes(language);
+  }
 
-    if (lowerLang === 'javascript' || lowerLang === 'js') {
-      return 'JavaScript Example';
-    }
+  private getShellCommandTitle(firstLine: string): string {
+    if (firstLine.includes('helm repo add')) return 'Add Helm Repository';
+    if (firstLine.includes('helm install')) return 'Install Chart';
+    if (firstLine.includes('helm upgrade')) return 'Upgrade Chart';
+    if (firstLine.includes('helm uninstall') || firstLine.includes('helm delete')) return 'Uninstall Chart';
+    if (firstLine.includes('kubectl')) return 'Kubernetes Command';
+    return 'Command Line Usage';
+  }
 
-    if (lowerLang === 'typescript' || lowerLang === 'ts') {
-      return 'TypeScript Example';
-    }
+  private getYamlConfigTitle(code: string): string {
+    if (code.includes('apiVersion:') && code.includes('kind:')) return 'Kubernetes Manifest';
+    if (code.includes('replicaCount:') || code.includes('image:') || code.includes('service:')) return 'Values Configuration';
+    if (code.includes('global:')) return 'Global Values';
+    return 'YAML Configuration';
+  }
 
-    if (lowerLang === 'python' || lowerLang === 'py') {
-      return 'Python Example';
-    }
+  private getGenericLanguageTitle(language: string): string {
+    const titleMap: Record<string, string> = {
+      'json': 'JSON Configuration',
+      'dockerfile': 'Docker Configuration',
+      'docker': 'Docker Configuration',
+      'helm': 'Helm Template',
+      'gotmpl': 'Helm Template',
+      'go-template': 'Helm Template',
+      'javascript': 'JavaScript Example',
+      'js': 'JavaScript Example',
+      'typescript': 'TypeScript Example',
+      'ts': 'TypeScript Example',
+      'python': 'Python Example',
+      'py': 'Python Example',
+    };
 
-    return 'Code Example';
+    return titleMap[language] || 'Code Example';
   }
 
   private extractExampleDescription(section: string, codeBlockIndex: number): string | undefined {
@@ -229,6 +335,10 @@ export class ReadmeParser {
   }
 
   private normalizeLanguage(language: string): string {
+    if (!language) {
+      return 'text';
+    }
+    
     const normalized = language.toLowerCase();
     
     const languageMap: Record<string, string> = {

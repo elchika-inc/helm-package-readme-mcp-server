@@ -30,6 +30,50 @@ export class ArtifactHubClient {
     return { repo, chart };
   }
 
+  private async makeApiRequest<T>(
+    url: string,
+    debugStart: string,
+    debugSuccess: string,
+    errorContext: string,
+    retryContext: string,
+    acceptHeader: string = 'application/json'
+  ): Promise<T> {
+    return withRetry(async () => {
+      logger.debug(debugStart);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+      
+      try {
+        const response = await fetch(url, {
+          signal: controller.signal,
+          headers: {
+            'Accept': acceptHeader,
+            'User-Agent': 'helm-package-readme-mcp/1.0.0',
+          },
+        });
+
+        if (!response.ok) {
+          handleHttpError(response.status, response, errorContext);
+        }
+
+        const data = acceptHeader === 'application/json' 
+          ? await response.json() as T 
+          : await response.text() as T;
+        
+        logger.debug(debugSuccess);
+        return data;
+      } catch (error) {
+        if ((error as Error).name === 'AbortError') {
+          handleApiError(new Error('Request timeout'), errorContext);
+        }
+        handleApiError(error, errorContext);
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }, 3, 1000, retryContext);
+  }
+
   async getPackageInfo(packageName: string, version?: string): Promise<ArtifactHubPackage> {
     const { repo, chart } = this.validatePackageName(packageName);
     
@@ -86,38 +130,15 @@ export class ArtifactHubClient {
 
   private async getSpecificVersionInfo(repo: string, chart: string, version: string): Promise<ArtifactHubPackage> {
     const url = `${this.baseUrl}/packages/helm/${encodeURIComponent(repo)}/${encodeURIComponent(chart)}/${encodeURIComponent(version)}`;
+    const context = `${repo}/${chart}@${version}`;
     
-    return withRetry(async () => {
-      logger.debug(`Fetching specific Helm chart version: ${repo}/${chart}@${version}`);
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-      
-      try {
-        const response = await fetch(url, {
-          signal: controller.signal,
-          headers: {
-            'Accept': 'application/json',
-            'User-Agent': 'helm-package-readme-mcp/1.0.0',
-          },
-        });
-
-        if (!response.ok) {
-          handleHttpError(response.status, response, `Artifact Hub for package ${repo}/${chart}@${version}`);
-        }
-
-        const data = await response.json() as ArtifactHubPackage;
-        logger.debug(`Successfully fetched specific Helm chart version: ${repo}/${chart}@${version}`);
-        return data;
-      } catch (error) {
-        if ((error as Error).name === 'AbortError') {
-          handleApiError(new Error('Request timeout'), `Artifact Hub for package ${repo}/${chart}@${version}`);
-        }
-        handleApiError(error, `Artifact Hub for package ${repo}/${chart}@${version}`);
-      } finally {
-        clearTimeout(timeoutId);
-      }
-    }, 3, 1000, `Artifact Hub getSpecificVersionInfo(${repo}/${chart}@${version})`);
+    return this.makeApiRequest<ArtifactHubPackage>(
+      url,
+      `Fetching specific Helm chart version: ${context}`,
+      `Successfully fetched specific Helm chart version: ${context}`,
+      `Artifact Hub for package ${context}`,
+      `Artifact Hub getSpecificVersionInfo(${context})`
+    );
   }
 
   async searchPackages(
@@ -268,3 +289,6 @@ export class ArtifactHubClient {
 }
 
 export const artifactHubClient = new ArtifactHubClient();
+
+// Alias for backward compatibility with tests
+export { ArtifactHubClient as ArtifactHubApi };

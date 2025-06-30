@@ -79,46 +79,24 @@ export async function withRetry<T>(
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      logger.debug(`Attempting ${context} (attempt ${attempt}/${maxRetries})`);
-      const result = await fn();
-      
-      if (attempt > 1) {
-        logger.info(`${context} succeeded on attempt ${attempt}`);
-      }
-      
+      const result = await executeAttempt(fn, context, attempt, maxRetries);
       return result;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       
-      // Don't retry certain errors
-      if (error instanceof PackageNotFoundError || 
-          error instanceof VersionNotFoundError ||
-          (error instanceof PackageReadmeMcpError && error.statusCode === 404)) {
-        logger.debug(`Not retrying ${context} due to 404 error`);
+      if (shouldNotRetry(error, context)) {
         throw error;
       }
 
-      if (attempt === maxRetries) {
+      if (isLastAttempt(attempt, maxRetries)) {
         logger.error(`${context} failed after ${maxRetries} attempts`, { error: lastError });
         break;
       }
 
-      // Calculate delay with exponential backoff
-      const delay = baseDelay * Math.pow(2, attempt - 1);
-      const jitter = Math.random() * 0.1 * delay; // Add up to 10% jitter
-      const totalDelay = delay + jitter;
-      
-      logger.warn(`${context} failed on attempt ${attempt}, retrying in ${Math.round(totalDelay)}ms`, { 
-        error: lastError.message,
-        attempt,
-        maxRetries,
-      });
-      
-      await new Promise(resolve => setTimeout(resolve, totalDelay));
+      await delayBeforeRetry(lastError, attempt, baseDelay, context, maxRetries);
     }
   }
 
-  // All retries failed
   throw lastError || new NetworkError(`All retry attempts failed for ${context}`);
 }
 
@@ -166,4 +144,55 @@ export function getRetryDelay(error: unknown, attempt: number, baseDelay: number
   const delay = baseDelay * Math.pow(2, attempt - 1);
   const jitter = Math.random() * 0.1 * delay;
   return delay + jitter;
+}
+
+// Helper functions for withRetry
+async function executeAttempt<T>(
+  fn: () => Promise<T>,
+  context: string,
+  attempt: number,
+  maxRetries: number
+): Promise<T> {
+  logger.debug(`Attempting ${context} (attempt ${attempt}/${maxRetries})`);
+  const result = await fn();
+  
+  if (attempt > 1) {
+    logger.info(`${context} succeeded on attempt ${attempt}`);
+  }
+  
+  return result;
+}
+
+function shouldNotRetry(error: unknown, context: string): boolean {
+  if (error instanceof PackageNotFoundError || 
+      error instanceof VersionNotFoundError ||
+      (error instanceof PackageReadmeMcpError && error.statusCode === 404)) {
+    logger.debug(`Not retrying ${context} due to 404 error`);
+    return true;
+  }
+  return false;
+}
+
+function isLastAttempt(attempt: number, maxRetries: number): boolean {
+  return attempt === maxRetries;
+}
+
+async function delayBeforeRetry(
+  error: Error,
+  attempt: number,
+  baseDelay: number,
+  context: string,
+  maxRetries: number
+): Promise<void> {
+  const delay = baseDelay * Math.pow(2, attempt - 1);
+  const jitter = Math.random() * 0.1 * delay;
+  const totalDelay = delay + jitter;
+  
+  logger.warn(`${context} failed on attempt ${attempt}, retrying in ${Math.round(totalDelay)}ms`, { 
+    error: error.message,
+    attempt,
+    maxRetries,
+  });
+  
+  await new Promise(resolve => setTimeout(resolve, totalDelay));
 }

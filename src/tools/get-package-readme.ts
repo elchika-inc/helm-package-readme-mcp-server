@@ -65,67 +65,19 @@ export async function getPackageReadme(params: GetPackageReadmeParams): Promise<
     
     logger.debug(`Package found: ${package_name}@${normalizedVersion}`);
     
-    // Extract README content
-    let readmeContent = packageInfo.readme || '';
-    let usageExamples: UsageExample[] = [];
-
-    // If no README in package info, try to get it from GitHub
-    if (!readmeContent && packageInfo.repository?.url) {
-      logger.debug(`No README in Artifact Hub, trying GitHub: ${packageInfo.repository.url}`);
-      try {
-        const githubReadme = await githubApi.getReadmeContent({
-          type: 'git',
-          url: packageInfo.repository.url,
-          directory: packageInfo.relative_path,
-        });
-        if (githubReadme) {
-          readmeContent = githubReadme;
-        }
-      } catch (error) {
-        logger.warn(`Failed to fetch README from GitHub for ${package_name}`, { error });
-      }
-    }
-
-    // Parse usage examples from README
-    if (readmeContent && include_examples) {
-      usageExamples = readmeParser.parseUsageExamples(readmeContent, include_examples);
-    }
-
-    // Try to get values.yaml for additional examples
-    if (include_examples) {
-      try {
-        const [repo, chart] = package_name.split('/');
-        const valuesContent = await artifactHubClient.getPackageValues(repo || '', chart || '', normalizedVersion);
-        if (valuesContent) {
-          const valuesExamples = readmeParser.extractValuesDocumentation(valuesContent);
-          usageExamples.push(...valuesExamples);
-        }
-      } catch (error) {
-        logger.debug(`Failed to fetch values.yaml for ${package_name}`, { error });
-      }
-    }
+    // Extract README content and usage examples
+    const { readmeContent, usageExamples } = await getReadmeAndExamples(
+      packageInfo,
+      package_name,
+      normalizedVersion,
+      include_examples
+    );
 
     // Clean the README content
     const cleanedReadme = readmeParser.cleanMarkdown(readmeContent || 'No README available');
 
     // Build installation info
-    const [repo, chart] = package_name.split('/');
-    const alternatives: string[] = [];
-    
-    // Add repository URL if available
-    if (packageInfo.repository && packageInfo.repository.url !== packageInfo.repository.name) {
-      alternatives.push(`helm repo add ${repo} ${packageInfo.repository.url}`);
-    }
-    
-    // Add version-specific install command
-    if (normalizedVersion !== 'latest') {
-      alternatives.push(`helm install my-${chart} ${package_name} --version ${packageInfo.version}`);
-    }
-    
-    const installation: InstallationInfo = {
-      command: `helm install my-${chart} ${package_name}`,
-      ...(alternatives.length > 0 && { alternatives }),
-    };
+    const installation = createInstallationInfo(package_name, packageInfo, normalizedVersion);
 
     // Build basic info
     const basicInfo: PackageBasicInfo = {
@@ -176,4 +128,92 @@ export async function getPackageReadme(params: GetPackageReadmeParams): Promise<
     logger.error(`Failed to get package README: ${package_name}@${normalizedVersion}`, { error });
     throw error;
   }
+}
+
+// Helper functions for better separation of concerns
+async function getReadmeAndExamples(
+  packageInfo: any,
+  packageName: string,
+  version: string,
+  includeExamples: boolean
+): Promise<{ readmeContent: string; usageExamples: UsageExample[] }> {
+  let readmeContent = packageInfo.readme || '';
+  let usageExamples: UsageExample[] = [];
+
+  // If no README in package info, try to get it from GitHub
+  if (!readmeContent && packageInfo.repository?.url) {
+    readmeContent = await getReadmeFromGitHub(packageInfo.repository, packageInfo.relative_path, packageName);
+  }
+
+  if (includeExamples) {
+    usageExamples = await getUsageExamples(readmeContent, packageName, version);
+  }
+
+  return { readmeContent, usageExamples };
+}
+
+async function getReadmeFromGitHub(repository: any, relativePath: string, packageName: string): Promise<string> {
+  logger.debug(`No README in Artifact Hub, trying GitHub: ${repository.url}`);
+  try {
+    const githubReadme = await githubApi.getReadmeContent({
+      type: 'git',
+      url: repository.url,
+      directory: relativePath,
+    });
+    return githubReadme || '';
+  } catch (error) {
+    logger.warn(`Failed to fetch README from GitHub for ${packageName}`, { error });
+    return '';
+  }
+}
+
+async function getUsageExamples(
+  readmeContent: string,
+  packageName: string,
+  version: string
+): Promise<UsageExample[]> {
+  const examples: UsageExample[] = [];
+
+  // Parse usage examples from README
+  if (readmeContent) {
+    examples.push(...readmeParser.parseUsageExamples(readmeContent, true));
+  }
+
+  // Try to get values.yaml for additional examples
+  try {
+    const [repo, chart] = packageName.split('/');
+    const valuesContent = await artifactHubClient.getPackageValues(repo || '', chart || '', version);
+    if (valuesContent) {
+      const valuesExamples = readmeParser.extractValuesDocumentation(valuesContent);
+      examples.push(...valuesExamples);
+    }
+  } catch (error) {
+    logger.debug(`Failed to fetch values.yaml for ${packageName}`, { error });
+  }
+
+  return examples;
+}
+
+function createInstallationInfo(
+  packageName: string,
+  packageInfo: any,
+  version: string
+): InstallationInfo {
+  const [repo, chart] = packageName.split('/');
+  const alternatives: string[] = [];
+  
+  // Add repository URL if available
+  if (packageInfo.repository && packageInfo.repository.url !== packageInfo.repository.name) {
+    alternatives.push(`helm repo add ${repo} ${packageInfo.repository.url}`);
+  }
+  
+  // Add version-specific install command
+  if (version !== 'latest') {
+    alternatives.push(`helm install my-${chart} ${packageName} --version ${packageInfo.version}`);
+  }
+  
+  return {
+    command: `helm install my-${chart} ${packageName}`,
+    ...(alternatives.length > 0 && { alternatives }),
+  };
 }

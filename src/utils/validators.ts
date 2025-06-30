@@ -8,63 +8,21 @@ export class ValidationError extends Error {
 }
 
 export function validatePackageName(packageName: string): void {
-  if (!packageName || typeof packageName !== 'string') {
-    throw new InvalidPackageNameError('Package name is required and must be a string');
-  }
-
-  // Trim whitespace
-  packageName = packageName.trim();
-
-  if (packageName.length === 0) {
-    throw new InvalidPackageNameError('Package name cannot be empty');
-  }
-
-  // Check format: repo/chart
-  const parts = packageName.split('/');
-  if (parts.length !== 2) {
-    throw new InvalidPackageNameError(`Package name must be in format 'repo/chart', got: ${packageName}`);
-  }
-
-  const [repo, chart] = parts;
-
-  // Validate repo name
-  if (!repo || repo.trim().length === 0) {
-    throw new InvalidPackageNameError('Repository name cannot be empty');
-  }
-
-  // Validate chart name
-  if (!chart || chart.trim().length === 0) {
-    throw new InvalidPackageNameError('Chart name cannot be empty');
-  }
-
-  // Check for invalid characters
-  const invalidChars = /[^a-zA-Z0-9\-_.]/;
-  if (invalidChars.test(repo)) {
-    throw new InvalidPackageNameError(`Repository name contains invalid characters: ${repo}`);
-  }
-
-  if (invalidChars.test(chart)) {
-    throw new InvalidPackageNameError(`Chart name contains invalid characters: ${chart}`);
-  }
-
-  // Check length limits
-  if (repo.length > 100) {
-    throw new InvalidPackageNameError('Repository name is too long (max 100 characters)');
-  }
-
-  if (chart.length > 100) {
-    throw new InvalidPackageNameError('Chart name is too long (max 100 characters)');
-  }
-
-  // Check for reserved names
-  const reservedNames = ['_', '.', '..', 'con', 'prn', 'aux', 'nul'];
-  if (reservedNames.includes(repo.toLowerCase()) || reservedNames.includes(chart.toLowerCase())) {
-    throw new InvalidPackageNameError('Package name contains reserved words');
-  }
+  validatePackageNameFormat(packageName);
+  
+  const [repo, chart] = packageName.trim().split('/');
+  validateRepoName(repo);
+  validateChartName(chart);
+  validateNameLimits(repo, chart);
+  validateReservedNames(repo, chart);
 }
 
-export function validateVersion(version: string): void {
-  if (!version || typeof version !== 'string') {
+export function validateVersion(version?: string): void {
+  if (version === undefined || version === null) {
+    return; // Allow undefined/null versions
+  }
+  
+  if (typeof version !== 'string') {
     throw new ValidationError('Version must be a string');
   }
 
@@ -221,4 +179,60 @@ export function parsePackageName(packageName: string): { repo: string; chart: st
     repo: repo?.trim() || '', 
     chart: chart?.trim() || '' 
   };
+}
+
+// Helper functions for validatePackageName
+function validatePackageNameFormat(packageName: string): void {
+  if (!packageName || typeof packageName !== 'string') {
+    throw new InvalidPackageNameError('Package name is required and must be a string');
+  }
+
+  const trimmedName = packageName.trim();
+  if (trimmedName.length === 0) {
+    throw new InvalidPackageNameError('Package name cannot be empty');
+  }
+
+  const parts = trimmedName.split('/');
+  if (parts.length !== 2) {
+    throw new InvalidPackageNameError(`Package name must be in format 'repo/chart', got: ${packageName}`);
+  }
+}
+
+function validateRepoName(repo: string): void {
+  if (!repo || repo.trim().length === 0) {
+    throw new InvalidPackageNameError('Repository name cannot be empty');
+  }
+
+  const invalidChars = /[^a-zA-Z0-9\-_.]/;
+  if (invalidChars.test(repo)) {
+    throw new InvalidPackageNameError(`Repository name contains invalid characters: ${repo}`);
+  }
+}
+
+function validateChartName(chart: string): void {
+  if (!chart || chart.trim().length === 0) {
+    throw new InvalidPackageNameError('Chart name cannot be empty');
+  }
+
+  const invalidChars = /[^a-zA-Z0-9\-_.]/;
+  if (invalidChars.test(chart)) {
+    throw new InvalidPackageNameError(`Chart name contains invalid characters: ${chart}`);
+  }
+}
+
+function validateNameLimits(repo: string, chart: string): void {
+  if (repo.length > 100) {
+    throw new InvalidPackageNameError('Repository name is too long (max 100 characters)');
+  }
+
+  if (chart.length > 100) {
+    throw new InvalidPackageNameError('Chart name is too long (max 100 characters)');
+  }
+}
+
+function validateReservedNames(repo: string, chart: string): void {
+  const reservedNames = ['_', '.', '..', 'con', 'prn', 'aux', 'nul'];
+  if (reservedNames.includes(repo.toLowerCase()) || reservedNames.includes(chart.toLowerCase())) {
+    throw new InvalidPackageNameError('Package name contains reserved words');
+  }
 }
